@@ -139,19 +139,44 @@ def solve_out_tips(graph, ending_nodes):
 
 
 def get_starting_nodes(graph):
-    pass
+    return [n for n, d in graph.in_degree() if d == 0]
 
 
 def get_sink_nodes(graph):
-    pass
+    return [n for n, d in graph.out_degree() if d == 0]
 
 
 def get_contigs(graph, starting_nodes, ending_nodes):
-    pass
+    contigs = []
+    for start in starting_nodes:
+        for end in ending_nodes:
+            # Compute all possible paths between start and end node
+            paths = nx.all_simple_paths(graph, source=start, target=end)
+            for path in paths:
+                # Create the contig
+                contig = path[0]
+                for seq in path[1:]:
+                    contig += seq[-1]
+                contigs.append((contig, len(contig)))
+    return contigs
 
 
 def save_contigs(contigs_list, output_file):
-    pass
+    text = ''
+    cpt = 0
+    # Prepare the text to fasta format
+    for element in contigs_list:
+        text += ('>contig_' + str(cpt) + ' len=' + str(element[1]) + '\n'
+                 + fill(element[0]) + '\n')
+        cpt += 1
+    # Write it in the output_file
+    with open(output_file, 'w') as my_file:
+        my_file.write(text)
+
+
+def fill(text, width=80):
+    """Split text with a line return to respect fasta format"""
+    return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
 
 
 #==============================================================
@@ -167,6 +192,12 @@ def main():
     # Create the digraph
     dic = build_kmer_dict(args.fastq_file, args.kmer_size)
     graph = build_graph(dic)
+
+    # Graph search and creation of the contigs.fasta file
+    starting_nodes = get_starting_nodes(graph)
+    ending_nodes = get_sink_nodes(graph)
+    contigs_list = get_contigs(graph, starting_nodes, ending_nodes)
+    save_contigs(contigs_list, args.output_file)
 
 
 if __name__ == '__main__':
