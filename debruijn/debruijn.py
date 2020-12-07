@@ -24,13 +24,13 @@ random.seed(9001)
 from random import randint
 import statistics
 
-__author__ = "Your Name"
+__author__ = "Lapeyre Adrien"
 __copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__credits__ = ["Lapeyre Adrien"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__maintainer__ = "Lapeyre Adrien"
+__email__ = "lapeyreadr@eisti.eu"
 __status__ = "Developpement"
 
 def isfile(path):
@@ -66,58 +66,93 @@ def get_arguments():
 
 
 def read_fastq(fastq_file):
-    pass
+    # Open the file in read mode
+    with open(fastq_file, 'r') as my_file:
+        for line in my_file:
+            # Return the line with the sequence and without the \n character
+            yield next(my_file)[:-1]
+            next(my_file)
+            next(my_file)
 
 
 def cut_kmer(read, kmer_size):
-    pass
+    # Return each kmer of a sequence
+    for i in range(len(read)-kmer_size+1):
+        yield read[i:i+kmer_size]
 
 
 def build_kmer_dict(fastq_file, kmer_size):
-    pass
+    dic = {}
+    # Sequence generator
+    read1 = read_fastq(fastq_file)
+    for seq in read1:
+        # Kmer generator
+        read2 = cut_kmer(seq, kmer_size)
+        # Add each kmer in the dictionnary if it doesn't exist or +1 to his value
+        for kmer in read2:
+            if kmer not in dic:
+                dic[kmer] = 1
+            else:
+                dic[kmer] += 1
+    return dic
 
 
 def build_graph(kmer_dict):
-    pass
+    graph = nx.DiGraph()
+    # Build the digraph adding each suffix and prefix kmers as nodes with edges and their weights
+    for key, value in kmer_dict.items():
+        graph.add_edge(key[:-1], key[1:], weight=value)
+    return graph
 
 
 def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
     pass
 
+
 def std(data):
     pass
 
 
-def select_best_path(graph, path_list, path_length, weight_avg_list, 
+def select_best_path(graph, path_list, path_length, weight_avg_list,
                      delete_entry_node=False, delete_sink_node=False):
     pass
+
 
 def path_average_weight(graph, path):
     pass
 
+
 def solve_bubble(graph, ancestor_node, descendant_node):
     pass
+
 
 def simplify_bubbles(graph):
     pass
 
+
 def solve_entry_tips(graph, starting_nodes):
     pass
+
 
 def solve_out_tips(graph, ending_nodes):
     pass
 
+
 def get_starting_nodes(graph):
     pass
+
 
 def get_sink_nodes(graph):
     pass
 
+
 def get_contigs(graph, starting_nodes, ending_nodes):
     pass
 
+
 def save_contigs(contigs_list, output_file):
     pass
+
 
 #==============================================================
 # Main program
@@ -128,6 +163,11 @@ def main():
     """
     # Get arguments
     args = get_arguments()
+
+    # Create the digraph
+    dic = build_kmer_dict(args.fastq_file, args.kmer_size)
+    graph = build_graph(dic)
+
 
 if __name__ == '__main__':
     main()
