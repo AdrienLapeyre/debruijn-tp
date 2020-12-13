@@ -19,7 +19,7 @@ import sys
 import statistics
 import random
 import networkx as nx
-import matplotlib
+import matplotlib.pyplot as plt
 
 random.seed(9001)
 
@@ -208,7 +208,7 @@ def path_average_weight(graph, path):
 
 
 def solve_bubble(graph, ancestor_node, descendant_node):
-    """Remove a selected bubble in the graph
+    """Removes a selected bubble in the graph
       :Parameters:
           graph: (nx.Digraph)
           ancestor_node: node
@@ -229,7 +229,7 @@ def solve_bubble(graph, ancestor_node, descendant_node):
 
 
 def simplify_bubbles(graph):
-    """Remove all bubbles in the graph
+    """Removes all bubbles in the graph
       :Parameters:
           graph: (nx.Digraph)
       Returns: graph (nx.Digraph)
@@ -258,11 +258,89 @@ def simplify_bubbles(graph):
 
 
 def solve_entry_tips(graph, starting_nodes):
-    pass
+    """Removes tips linked to bad starting nodes
+      :Parameters:
+          graph: (nx.Digraph)
+          starting_nodes: list of start nodes (list)
+      Returns: graph (nx.Digraph)
+    """
+    # Verify all pairs of starting nodes
+    for i in range(len(starting_nodes)-1):
+        path_list = []
+        path_length = []
+        weight_avg_list = []
+        # Check if one node of the pair hasn't been deleted yet
+        if starting_nodes[i] in graph.nodes and starting_nodes[i+1] in graph.nodes:
+            # Find the lowest common successor of two starting nodes
+            successor = None
+            successors1 = nx.nodes(nx.dfs_tree(graph, starting_nodes[i]))
+            successors2 = nx.nodes(nx.dfs_tree(graph, starting_nodes[i+1]))
+            # Iterate over all successors of first starting node
+            for node1 in successors1:
+                # Iterate over all successors of second starting node
+                for node2 in successors2:
+                    if node1 == node2:
+                        successor = node1
+                        break
+                else:
+                    continue
+                break
+            # If a successor exists
+            if successor != None:
+                # Compute all possible paths between first starting node and successor
+                paths1 = list(nx.all_simple_paths(graph, source=starting_nodes[i],
+                                                  target=successor))
+                for path in paths1:
+                    path_list.append(path)
+                # Compute all possible paths between second starting node and successor
+                paths2 = list(nx.all_simple_paths(graph, source=starting_nodes[i+1],
+                                                  target=successor))
+                for path in paths2:
+                    path_list.append(path)
+                # Compute lengths and average weights of all paths finded
+                for path in path_list:
+                    path_length.append(len(path))
+                    weight_avg_list.append(path_average_weight(graph, path))
+                # Remove paths that aren't the best (including the starting node)
+                graph = select_best_path(graph, path_list, path_length, weight_avg_list,
+                                         delete_entry_node=True)
+    return graph
 
 
 def solve_out_tips(graph, ending_nodes):
-    pass
+    """Removes tips linked to bad ending nodes
+      :Parameters:
+          graph: (nx.Digraph)
+          ending_nodes: list of sink nodes (list)
+      Returns: graph (nx.Digraph)
+    """
+    # Verify all pairs of ending nodes
+    for i in range(len(ending_nodes)-1):
+        path_list = []
+        path_length = []
+        weight_avg_list = []
+        # Check if one node of the pair hasn't been deleted yet
+        if ending_nodes[i] in graph.nodes and ending_nodes[i+1] in graph.nodes:
+            # Find the lowest common ancestor of two ending nodes
+            ancestor = nx.lowest_common_ancestor(graph, ending_nodes[i], ending_nodes[i+1])
+            # If an ancestor exists
+            if ancestor != None:
+                # Compute all possible paths between ancestor and first ending node
+                paths1 = list(nx.all_simple_paths(graph, source=ancestor, target=ending_nodes[i]))
+                for path in paths1:
+                    path_list.append(path)
+                # Compute all possible paths between ancestor and second ending node
+                paths2 = list(nx.all_simple_paths(graph, source=ancestor, target=ending_nodes[i+1]))
+                for path in paths2:
+                    path_list.append(path)
+                # Compute lengths and average weights of all paths finded
+                for path in path_list:
+                    path_length.append(len(path))
+                    weight_avg_list.append(path_average_weight(graph, path))
+                # Remove paths that aren't the best (including the ending node)
+                graph = select_best_path(graph, path_list, path_length, weight_avg_list,
+                                         delete_sink_node=True)
+    return graph
 
 
 def get_starting_nodes(graph):
@@ -324,8 +402,24 @@ def save_contigs(contigs_list, output_file):
 
 
 def fill(text, width=80):
-    """Split text with a line return to respect fasta format"""
+    """Splits text with a line return to respect fasta format"""
     return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
+
+
+def draw_graph(graph, graphimg_file):
+    """Draws the graph
+      :Parameters:
+          graph: (nx.Digraph)
+          graphimg_file: path of the image
+    """
+    elarge = [(u, v) for (u, v, d) in graph.edges(data=True) if d['weight'] > 3]
+    esmall = [(u, v) for (u, v, d) in graph.edges(data=True) if d['weight'] <= 3]
+    pos = nx.random_layout(graph)
+    nx.draw_networkx_nodes(graph, pos, node_size=6)
+    nx.draw_networkx_edges(graph, pos, edgelist=elarge, width=6)
+    nx.draw_networkx_edges(graph, pos, edgelist=esmall, width=6, alpha=0.5,
+                           edge_color='b', style='dashed')
+    plt.savefig(graphimg_file)
 
 
 #==============================================================
@@ -342,14 +436,25 @@ def main():
     dic = build_kmer_dict(args.fastq_file, args.kmer_size)
     graph = build_graph(dic)
 
-    # Simplify the graph
-    graph = simplify_bubbles(graph)
-
-    # Graph search and creation of the contigs.fasta file
+    # Compute starting and ending nodes
     starting_nodes = get_starting_nodes(graph)
     ending_nodes = get_sink_nodes(graph)
+
+    # Simplify the graph
+    graph = simplify_bubbles(graph)
+    graph = solve_entry_tips(graph, starting_nodes)
+    graph = solve_out_tips(graph, ending_nodes)
+
+    # Compute starting and ending nodes (some might have been deleted)
+    starting_nodes = get_starting_nodes(graph)
+    ending_nodes = get_sink_nodes(graph)
+
+    # Graph search and creation of the contigs.fasta file
     contigs_list = get_contigs(graph, starting_nodes, ending_nodes)
     save_contigs(contigs_list, args.output_file)
+
+    # Draw the graph
+    draw_graph(graph, 'graph')
 
 
 if __name__ == '__main__':
